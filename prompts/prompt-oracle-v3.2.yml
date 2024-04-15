@@ -1,0 +1,20 @@
+initial_prompt: "The goal is to find the sequence of 20 characters, with 12 'A' characters and 8 'B' characters, that minimizes the distance from the desired result as evaluated by an oracle. The oracle takes a 20-character sequence as input and returns a numerical distance score, where a lower score indicates closer proximity to the desired result.
+
+Please propose an initial batch of {n_batch} sequences following the specified format and character requirements. Base your proposals on your understanding of effective sequences for this type of problem.
+
+After receiving the distance scores for this initial batch, propose subsequent batches that aim to minimize the distances further. Derive the new proposals by adapting and refining the sequences from previous batches with relatively low distance scores, while also introducing variations to promote diversity and avoid premature convergence.
+
+Provide the sequences in a comma-separated list without any additional formatting. The iterative process will continue for a fixed number of batches, with the goal of identifying as many high-quality (low-distance) solutions as possible."
+batch_prompt: "Here are the sequences from the previous batch and their corresponding distance scores:
+<result>
+Note that sequences with distances below 1.34 are considered promising solutions.
+
+Based on these results, please propose a new batch of {n_batch} sequences that you expect to yield lower distances to the desired result. Follow these guidelines:
+
+1. Propose sequences similar to those with distances below 1.34, with minor variations to explore neighboring regions of the solution space.
+2. For sequences with distances between 1.34 and 2.0, propose variations with more significant changes, as they are closer to the desired result but still have room for improvement.
+3. For sequences with distances above 2.0, propose sequences that are substantially different, as they are far from the desired result and require more extensive exploration.
+4. Maintain a balance between refining promising solutions and introducing diversity to avoid local optima.
+5. Do not propose duplicate sequences or sequences already evaluated.
+
+Provide the new batch in a comma-separated list, ensuring each sequence is 20 characters long with 12 'A' characters and 8 'B' characters."
