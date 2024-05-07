@@ -158,18 +158,6 @@ def extract_seq_from_user_message(message):
     return seq
 
 
-# def extract_results_from_messages(messages):
-#     seq_init = [extract_seq_from_init_message(messages[0])]
-#     user_messages = [it for it in messages if it['role'] == 'user']
-#     seq_lines = seq_init
-#     for it in user_messages[1:]:
-#         seq_lines += [extract_seq_from_user_message(it)]
-#     iteration_scores = []
-#     for sl in seq_lines:
-#         scores = [float(it.split(':')[1]) for it in sl.split('\n')[:-1]]
-#         iteration_scores.append(scores)
-#     return iteration_scores
-
 def extract_results_from_messages(messages):
     old_sequences = []
     seq_init = [extract_seq_from_init_message(messages[0])]
@@ -213,3 +201,11 @@ def k_below_d(scores, d):
     for iter in scores:
         out.append(len([it for it in iter if it < d]))
     return out
+
+
+def top_k_d(scores, top_k=None, min_k=0):
+    scs_f = [[it for it in x if float(it) > 0] for x in scores]
+    min_d = [np.min(it[min_k:]) for it in scs_f]
+    if top_k is not None:
+        min_d = [np.mean(it[:top_k]) for it in scs_f]
+    return min_d

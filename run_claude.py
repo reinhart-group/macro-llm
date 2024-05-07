@@ -33,10 +33,8 @@ number_words = {'three': 3, 'five': 5, 'ten': 10}
 
 def run_rollout(morph, n_batch, n_iter, use_oracle, use_seed, prompt_yml, gen_random, pad_random, temperature=0.0, suffix=""):
     # load the model ensemble
-    drive_prefix = '/Users/wfr5091/Google Drive/Shared drives/Polymers-Data'
-
     model_ensemble = []
-    model_path = os.path.join(drive_prefix, 'models', 'gru-opt-cv10-sym')
+    model_path = os.path.join('models', 'gru-opt-cv10-sym')
     for i in range(10):
         model = torch.jit.load(os.path.join(model_path, f'fold-{i:02d}-scripted.pt'), map_location='cpu')
         model.eval()
