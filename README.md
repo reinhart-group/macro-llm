@@ -24,18 +24,21 @@ Note this repository contains codes and data files for the manuscript. A snapsho
 - `figure1b.ipynb` - renders panel b of Fig. 1
 - `figure1efg.ipynb` - renders the last row of Fig. 1 (panels e-g)
 - `figure2.ipynb` - renders all of Fig. 2
+- `figure_si.ipynb` - renders Figs. S1 and S2
+- `figure_md_validation.ipynb` - renders Fig. S3
 
 # Data files
 
 - `prompts/`
-  - `prompt-scientific-v4.yml` - the full text of the scientific prompt, to be read by `run_claude.py`
-  - `prompt-oracle-v4.yml` - the full text of the oracle prompt, to be read by `run_claude.py`
+  - `prompt-scientific-v4.4.yml` - the full text of the scientific prompt, to be read by `run_claude.py`
+  - `prompt-oracle-v4.4.yml` - the full text of the oracle prompt, to be read by `run_claude.py`
 - `models/` - the TorchScript RNN models used to make predictions
 - `data/`
   - `embeddings` - calculated embeddings for a collection of sequences from our prior work
-  - `llm-logs` - the raw logs obtained from the LLM (other algorithms made to look like the LLM logs after the fact)
-    - `all-rollouts-kltd.csv` - postprocessed logs for all the rollouts using the "top $k < d^*$" metric
-    - `all-rollouts-topkd.csv` - postprocessed logs for all the rollouts using the "mean $d$ for top $k$" metric
+  - `llm-logs` - the raw logs obtained from the Claude 3.5 Sonnet LLM (other algorithms made to look like the LLM logs after the fact)
+  - `llm-logs-opus` - the raw logs obtained from the Claude 3.0 Opus LLM (used in the first draft of the article, replaced by Claude 3.5 Sonnet) 
+  - `all-rollouts-kltd.csv` - postprocessed logs for all the rollouts using the "top $k < d^*$" metric
+  - `all-rollouts-topkd.csv` - postprocessed logs for all the rollouts using the "mean $d$ for top $k$" metric
   - `sample-rollout-membranes-x-3.csv` - postprocessed logs for a single rollout replica, `x` = each algorithm type
   - `snapshots` - png snapshots of MD simulation results at different locations in the manifold
   
