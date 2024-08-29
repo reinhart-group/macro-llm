@@ -1,6 +1,6 @@
 # Codes and data for "Large language models design sequence-defined macromolecules via evolutionary optimization"
 
-Note this repository contains codes and data files for the manuscript. A snapshot of this repository, frozen at the time of submission, can be found on Zenodo (INSERT DOI) 
+Note this repository contains codes and data files for the manuscript. A snapshot of this repository, frozen at the time of submission, can be found on Zenodo (https://doi.org/10.5281/zenodo.13489838) 
 
 # Codes
 
