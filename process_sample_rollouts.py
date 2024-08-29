@@ -7,6 +7,10 @@ import pandas as pd
 import torch
 
 
+def get_suffix(logfile):
+    return int(logfile.split('.json')[0][-1])
+
+
 def main():
     base_dir = os.path.join('data', 'llm-logs')
     experiment_names = ['oracle', 'scientific', 'active', 'evolutionary', 'random']
@@ -19,10 +23,14 @@ def main():
         model.eval()
         model_ensemble.append(model)
 
-    ridx = 3
+    ridx = 1
     for experiment in experiment_names:
-        logfiles = glob.glob(os.path.join(base_dir, 'unseeded', experiment, 'membrane', '*.json'))
-        log = sorted(logfiles, key=os.path.getmtime)[ridx]
+        experiment_longname = experiment
+
+        logfiles = glob.glob(os.path.join(base_dir, 'unseeded', experiment_longname, 'membrane', f'*{ridx}.json'))
+        log = sorted(logfiles, key=os.path.getmtime)[0]
+        if get_suffix(log) != ridx:
+            raise ValueError(f'Expected to get replica 3 (#4), got {log} with suffix {get_suffix(log)}')
         with open(log, 'r') as fid:
             messages = json.load(fid)['messages']
 
@@ -63,7 +71,7 @@ def main():
 
         data = pd.DataFrame(np.hstack([all_seq.reshape(-1, 1), all_iter.reshape(-1, 1), all_preds]),
                             columns=['Sequence', 'Iteration', 'Z0', 'Z1'])
-        data.to_csv(os.path.join('data', f'sample-rollout-membranes-{experiment}-{ridx}.csv'))
+        data.to_csv(os.path.join('data', f'rollout-membrane-{experiment}-{ridx}.csv'))
 
 
 if __name__ == "__main__":

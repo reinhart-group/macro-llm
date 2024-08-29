@@ -12,26 +12,11 @@ from target_defs import archetype_predictions, archetype_sequences, archetype_pl
 import yaml
 
 
-def hash_dict(dictionary, n=8):
-    """
-    Converts a dictionary to a string and hashes it using SHA-256.
-    Returns the hexadecimal digest of the hash.
-    """
-    # Convert the dictionary to a string sorted by keys
-    dict_string = str(sorted(dictionary.items()))
-
-    # Hash the string using SHA-256
-    sha256 = hashlib.sha256()
-    sha256.update(dict_string.encode('utf-8'))
-
-    # Return the hexadecimal digest
-    return sha256.hexdigest()[:n]
-
-
 number_words = {'three': 3, 'five': 5, 'ten': 10}
 
 
-def run_rollout(morph, n_batch, n_iter, use_oracle, use_seed, prompt_yml, gen_random, pad_random, temperature=0.0, suffix=""):
+def run_rollout(morph, n_batch, n_iter, use_seed, prompt_yml, llm_model, gen_random, pad_random, temperature=0.0, suffix=""):
+
     # load the model ensemble
     model_ensemble = []
     model_path = os.path.join('models', 'gru-opt-cv10-sym')
@@ -41,22 +26,20 @@ def run_rollout(morph, n_batch, n_iter, use_oracle, use_seed, prompt_yml, gen_ra
         model_ensemble.append(model)
 
     # set up the LLM client
-    with open('credentials-anthropic.txt', 'r') as fid:
+    with open('credentials/credentials-anthropic.txt', 'r') as fid:
         api_key = fid.read().strip()
 
-    client = anthropic.Anthropic(api_key=api_key, timeout=30, max_retries=1)
-    llm_model = "claude-3-opus-20240229"
+    client = anthropic.Anthropic(api_key=api_key, timeout=60, max_retries=10)
 
     target = archetype_predictions[morph]
 
     # set up the prompts
-
+    use_oracle = 'oracle' in prompt_yml.lower()
     if use_oracle:
         with open(prompt_yml, 'r') as fid:
             buffer = yaml.safe_load(fid)
         initial_prompt = buffer['initial_prompt'].format(n_batch=n_batch, n_iter=n_iter+1)
         batch_prompt = buffer['batch_prompt'].format(n_batch=n_batch, n_iter=n_iter+1)
-
     else:
         target_description = archetype_plaintext[morph]
         with open(prompt_yml, 'r') as fid:
@@ -80,29 +63,30 @@ def run_rollout(morph, n_batch, n_iter, use_oracle, use_seed, prompt_yml, gen_ra
               'gen_random': gen_random,
               'pad_random': pad_random}
 
-    param_hash = hash_dict(params)
+    param_hash = message_utils.hash_dict(params)
 
     ridx = int(suffix)
-    rng = np.random.RandomState(ridx)
 
     # generate all sequences by composition
     n = 20
+    allow_symmetry = False
     all_seq_by_frac = {k: set() for k in range(n + 1)}
     limit = 2 ** n
     for i in range(limit):
         sequence = bin(i)[2:].zfill(n)
         mirror_sequence = sequence[::-1]
-        if sequence <= mirror_sequence:
+        if sequence <= mirror_sequence or allow_symmetry:
             all_seq_by_frac[sequence.count('1')].add(sequence)
 
     # create a master list of all possible sequences
     all_sequences = []
     for k, v in all_seq_by_frac.items():
         all_sequences += v
-    possible_sequences = np.array(list(all_seq_by_frac[8]))
+    possible_sequences = np.array(sorted(all_seq_by_frac[8])).tolist()  # without sort the order is NOT guaranteed
 
     if gen_random:
         print(f'choosing randomly from {len(possible_sequences)} sequences')
+        rng = np.random.RandomState(ridx)
         init_idx = rng.choice(np.arange(len(possible_sequences)), 5, replace=False)
         init_bitstr = [possible_sequences[it] for it in init_idx]
         if use_seed:
@@ -115,7 +99,10 @@ def run_rollout(morph, n_batch, n_iter, use_oracle, use_seed, prompt_yml, gen_ra
     messages = [{"role": "user", "content": [{"type": "text", "text": initial_prompt}]}]
 
     start_time = int(time.time())
-    logfile = f'logs/claude-test-{param_hash}-{start_time}{suffix}.json'
+    seed_hash = 'seeded' if use_seed else 'unseeded'
+    prompt_hash = f'oracle' if use_oracle else f'scientific'
+    logdir = f'data/llm-logs/{seed_hash}/{prompt_hash}/{morph}/'
+    logfile = os.path.join(logdir, f'claude-{param_hash}-{start_time}{suffix}.json')
     unique_seq = []
     for _ in range(n_iter * 2):
 
@@ -132,14 +119,20 @@ def run_rollout(morph, n_batch, n_iter, use_oracle, use_seed, prompt_yml, gen_ra
                 tries += 1
         messages.append(message_utils.build_llm_message(response.content[0].text))
         result = message_utils.extract_AB_substrings(response.content[0].text)
-        # these_sequences = list(set(message_utils.postproc_sequences(result)))
         good_seq = message_utils.postproc_and_pad_sequences(result, number_words[n_batch], unique_seq, rng, possible_sequences, pad_random=pad_random)
-        # these_sequences = list(set(good_seq))
+        if len(good_seq) != 5:
+            raise ValueError('Expected 5 sequences back from postproc_and_pad_sequences')
+        if type(good_seq) is not list:
+            raise ValueError(f'Expected good_seq to be type list, got {str(type(good_seq))}')
+        if type(unique_seq) is not list:
+            raise ValueError(f'Expected unique_seq to be type list, got {str(type(unique_seq))}')
         these_sequences = []
         for it in good_seq:  # this is to preserve ordering
             if it not in these_sequences:
                 these_sequences.append(it)
         unique_seq = sorted(set(unique_seq + these_sequences))
+        if len(these_sequences) != 5:
+            raise ValueError(f'Expected 5 sequences packed into these_sequences: {str(good_seq)} -> {str(these_sequences)}')
         next_message = message_utils.build_user_message(batch_prompt,
                                                         model_utils.evaluate_sequences(these_sequences, target,
                                                                                        model_ensemble, sort=False))
@@ -160,22 +153,39 @@ def main():
 
     parser.add_argument('morph', type=str, help='Target morphology (required)')
     parser.add_argument('prompt', type=str, help='Which prompt to use, specified as a yml file (required)')
-    parser.add_argument('--use_oracle', action='store_true', default=False, help='Whether to use oracle prompt (otherwise contextualized prompt)')
     parser.add_argument('--nproc', type=int, default=5, help='Number of processes (default: 5)')
     parser.add_argument('--n_batch', type=str, default='five', help='Batch size (default: "five")')
     parser.add_argument('--n_iter', type=int, default=10, help='Number of iterations to run (default: 10)')
     parser.add_argument('--temperature', type=float, default=0, help='Temperature for LLM (default: 0)')
     parser.add_argument('--use_seed', action='store_true', default=False, help='Whether to seed with one good solution (default: False)')
-    parser.add_argument('--gen_random', action='store_true', default=False, help='Whether to seed with random solutions same as AL (default: False)')
-    parser.add_argument('--pad_random', action='store_true', default=False, help='Whether to pad batches with random solutions (default: False)')
+    parser.add_argument('--gen_random', action='store_true', default=True, help='Whether to seed with random solutions same as AL (default: True)')
+    parser.add_argument('--pad_random', action='store_true', default=True, help='Whether to pad batches with random solutions (default: True)')
+    parser.add_argument('--sonnet35', action='store_true', default=False, help='Whether to use Claude 3.5 Sonnet (default: False)')
+    parser.add_argument('--opus30', action='store_true', default=False, help='Whether to use Claude 3.0 Opus (default: False)')
 
     args = parser.parse_args()
+
+    if args.sonnet35 and not args.opus30:
+        llm_model = "claude-3-5-sonnet-20240620"
+    elif args.opus30 and not args.sonnet35:
+        llm_model = "claude-3-opus-20240229"
+    else:
+        raise ValueError('Must use one of either: --opus30 OR --sonnet35')
+
+    # do this before async multiprocess!
+    seed_hash = 'seeded' if args.use_seed else 'unseeded'
+    use_oracle = 'oracle' in args.prompt.lower()
+    prompt_hash = f'oracle' if use_oracle else f'scientific'
+    logdir = f'data/llm-logs/{seed_hash}/{prompt_hash}/{args.morph}/'
+    if not os.path.isdir(logdir):
+        os.mkdir(logdir)
 
     pool = multiprocessing.Pool(processes=args.nproc)
     # submit the tasks to the pool for parallel execution
     results = {}
     for i in range(args.nproc):
-        result = pool.apply_async(run_rollout, args=(args.morph, args.n_batch, args.n_iter, args.use_oracle, args.use_seed, args.prompt, args.gen_random, args.pad_random, args.temperature, str(i)))
+        result = pool.apply_async(run_rollout, args=(args.morph, args.n_batch, args.n_iter, args.use_seed, args.prompt,
+                                                     llm_model, args.gen_random, args.pad_random, args.temperature, str(i)))
         results[i] = result
 
     # wait for all tasks to complete and collect the results

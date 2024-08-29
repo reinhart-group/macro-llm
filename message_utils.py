@@ -87,7 +87,10 @@ def postproc_and_pad_sequences(substrings, n_batch, old_sequences, rng, possible
         if result is None:
             continue
         rec_seq.append(result)
-    good_seq = [it for it in rec_seq if it not in old_sequences]
+    good_seq = []
+    for it in rec_seq:
+        if it not in old_sequences and it not in good_seq:
+            good_seq.append(it)
     non_unique_seq = [it for it in rec_seq if it in old_sequences]
     print(f'Received {len(substrings)} from the LLM...Filtered to {len(good_seq)} new sequences')
     if len(good_seq) < n_batch:
@@ -97,23 +100,41 @@ def postproc_and_pad_sequences(substrings, n_batch, old_sequences, rng, possible
                 result = random_bitflip(result)
             good_seq.append(result)
         print(f'Got {len(good_seq)} new sequences with 1st round bit flipping')
+    flip_attempts = 0
     while len(good_seq) < n_batch:
-        for result in good_seq:
+        for base_result in good_seq:
+            result = str(base_result)
             # do a random bit flip if this sequence is already present
-            while (result in good_seq) or (result in old_sequences):
+            while ((result in good_seq) or (result in old_sequences)) and len(good_seq) < n_batch:
                 result = random_bitflip(result)
-            good_seq.append(result)
+                flip_attempts += 1
+                if flip_attempts > 100:
+                    print('result:', result)
+                    print('good_seq:', good_seq)
+                    print('old_sequences:', old_sequences)
+                    raise RuntimeError('Failed to generate any new sequences by random bit flipping.')
+            if result not in good_seq and result not in old_sequences:
+                good_seq.append(result)
+            if len(good_seq) >= n_batch:
+                break
         print(f'Got {len(good_seq)} new sequences with 2nd round bit flipping')
+        if len(good_seq) == 0:
+            break
     # add random sequences to fill out the batch if < n_batch were given
+    did_pad = False
     while (len(good_seq) < n_batch) and pad_random:
-        new_seq = rng.choice(possible_sequences, 1)
+        new_seq = rng.choice(possible_sequences, 1)[0].replace('0', 'A').replace('1', 'B')
         if (new_seq in old_sequences) or (new_seq in good_seq):
             continue
         good_seq.append(new_seq)
+        did_pad = True
+    if len(good_seq) < n_batch and did_pad:
+        print('Warning: pad_random failed to produce sufficient valid sequences!')
+    elif len(good_seq) >= n_batch and did_pad:
+        print(f'Got {len(good_seq)} new sequences with random padding')
     # down-select to only the number we wanted if the LLM gave more
     if len(good_seq) > n_batch:
         print(f'Got {len(good_seq)} in this batch, wanted {n_batch}')
-        # good_seq = rng.choice(good_seq, n_batch, replace=False)
         good_seq = good_seq[:n_batch]  # take them in the order they were suggested
     return good_seq
 

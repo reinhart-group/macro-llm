@@ -70,11 +70,17 @@ def main():
             for seed_type in [True, False]:
                 arch_results = []
                 for morph in arch_morphs:
+                    experiment_longname = experiment
+                    target_dir = os.path.join(base_dir, named_bools[seed_type], experiment_longname, morph)
                     logfiles = sorted(
-                        glob.glob(os.path.join(base_dir, named_bools[seed_type], experiment, morph, '*.json')))
+                        glob.glob(os.path.join(target_dir, '*.json')))
+                    if len(logfiles) < 5:
+                        continue
                     results_iter, results_seq = process_logs(logfiles, reducer, reducer_args)
                     if results_seq.shape[1] > 50:  # truncate at 50 labeled sequences
                         results_seq = results_seq[:, :50]
+                    if results_seq.shape[1] < 50:
+                        print(f'Warning! {target_dir} gave less than 50 unique sequences')
                     arch_results.append(np.nanmax(results_seq, axis=1).flatten())
                     for i, it in enumerate(results_seq):
                         big_df.append([experiment, named_bools[seed_type], morph, i, *it.tolist()])
@@ -82,7 +88,7 @@ def main():
 
         data = pd.DataFrame(big_df, columns=['Experiment', 'Seed Type', 'Morphology', 'Replica',
                                              *[f'{reducer_name} after {i + 1} Labels' for i in range(50)]])
-        data.to_csv(os.path.join(base_dir, f'all-rollouts-{reducer_name}.csv'))
+        data.to_csv(os.path.join('data', f'all-rollouts-{reducer_name}.csv'))
 
 
 if __name__ == "__main__":
